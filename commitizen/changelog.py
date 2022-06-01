@@ -29,7 +29,7 @@ import os
 import re
 from collections import OrderedDict, defaultdict
 from datetime import date
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Pattern, Tuple
 
 from jinja2 import Environment, PackageLoader
 
@@ -74,6 +74,7 @@ def generate_tree_from_commits(
     unreleased_version: Optional[str] = None,
     change_type_map: Optional[Dict[str, str]] = None,
     changelog_message_builder_hook: Optional[Callable] = None,
+    tag_pattern: Pattern = re.compile(".*"),
 ) -> Iterable[Dict]:
     pat = re.compile(changelog_pattern)
     map_pat = re.compile(commit_parser, re.MULTILINE)
@@ -97,14 +98,15 @@ def generate_tree_from_commits(
         commit_tag = get_commit_tag(commit, tags)
 
         if commit_tag is not None and commit_tag not in used_tags:
+            matches = tag_pattern.fullmatch(commit_tag.name)
+            if not matches:
+                continue
             used_tags.append(commit_tag)
             yield {
                 "version": current_tag_name,
                 "date": current_tag_date,
                 "changes": changes,
             }
-            # TODO: Check if tag matches the version pattern, otherwise skip it.
-            # This in order to prevent tags that are not versions.
             current_tag_name = commit_tag.name
             current_tag_date = commit_tag.date
             changes = defaultdict(list)

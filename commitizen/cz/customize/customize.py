@@ -50,6 +50,10 @@ class CustomizeCommitsCz(BaseCommitizen):
         if change_type_map:
             self.change_type_map = change_type_map
 
+        tag_parser = self.custom_settings.get("tag_pattern")
+        if tag_parser:
+            self.tag_parser = str(tag_parser)
+
     def questions(self) -> Questions:
         return self.custom_settings.get("questions", [{}])
 
