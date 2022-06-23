@@ -154,6 +154,7 @@ class Changelog:
             unreleased_version,
             change_type_map=change_type_map,
             changelog_message_builder_hook=changelog_message_builder_hook,
+            tag_pattern=self.cz.tag_pattern,
         )
         if self.change_type_order:
             tree = changelog.order_changelog_tree(tree, self.change_type_order)

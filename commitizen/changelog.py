@@ -29,7 +29,7 @@ import os
 import re
 from collections import OrderedDict, defaultdict
 from datetime import date
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Pattern, Tuple
 
 from jinja2 import Environment, PackageLoader
 
@@ -74,6 +74,7 @@ def generate_tree_from_commits(
     unreleased_version: Optional[str] = None,
     change_type_map: Optional[Dict[str, str]] = None,
     changelog_message_builder_hook: Optional[Callable] = None,
+    tag_pattern: Pattern = re.compile(".*"),
 ) -> Iterable[Dict]:
     pat = re.compile(changelog_pattern)
     map_pat = re.compile(commit_parser, re.MULTILINE)
@@ -97,14 +98,15 @@ def generate_tree_from_commits(
         commit_tag = get_commit_tag(commit, tags)
 
         if commit_tag is not None and commit_tag not in used_tags:
+            matches = tag_pattern.fullmatch(commit_tag.name)
+            if not matches:
+                continue
             used_tags.append(commit_tag)
             yield {
                 "version": current_tag_name,
                 "date": current_tag_date,
                 "changes": changes,
             }
-            # TODO: Check if tag matches the version pattern, otherwise skip it.
-            # This in order to prevent tags that are not versions.
             current_tag_name = commit_tag.name
             current_tag_date = commit_tag.date
             changes = defaultdict(list)
@@ -113,33 +115,52 @@ def generate_tree_from_commits(
         if not matches:
             continue
 
-        # Process subject from commit message
-        message = map_pat.match(commit.message)
-        if message:
-            parsed_message: Dict = message.groupdict()
-            # change_type becomes optional by providing None
-            change_type = parsed_message.pop("change_type", None)
-
-            if change_type_map:
-                change_type = change_type_map.get(change_type, change_type)
-            if changelog_message_builder_hook:
-                parsed_message = changelog_message_builder_hook(parsed_message, commit)
-            changes[change_type].append(parsed_message)
-
-        # Process body from commit message
-        body_parts = commit.body.split("\n\n")
-        for body_part in body_parts:
-            message_body = body_map_pat.match(body_part)
-            if not message_body:
-                continue
-            parsed_message_body: Dict = message_body.groupdict()
-
-            change_type = parsed_message_body.pop("change_type", None)
-            if change_type_map:
-                change_type = change_type_map.get(change_type, change_type)
-            changes[change_type].append(parsed_message_body)
+        update_changes_for_commit(
+            changes,
+            commit,
+            change_type_map,
+            changelog_message_builder_hook,
+            map_pat,
+            body_map_pat,
+        )
 
     yield {"version": current_tag_name, "date": current_tag_date, "changes": changes}
+
+
+def update_changes_for_commit(
+    changes: Dict,
+    commit: GitCommit,
+    change_type_map: Optional[Dict[str, str]],
+    changelog_message_builder_hook: Optional[Callable],
+    map_pat: Pattern,
+    body_map_pat: Pattern,
+):
+    """Processes the commit message and will update changes if applicable."""
+    # Process subject from commit message
+    message = map_pat.match(commit.message)
+    if message:
+        parsed_message: Dict = message.groupdict()
+        # change_type becomes optional by providing None
+        change_type = parsed_message.pop("change_type", None)
+
+        if change_type_map:
+            change_type = change_type_map.get(change_type, change_type)
+        if changelog_message_builder_hook:
+            parsed_message = changelog_message_builder_hook(parsed_message, commit)
+        changes[change_type].append(parsed_message)
+
+    # Process body from commit message
+    body_parts = commit.body.split("\n\n")
+    for body_part in body_parts:
+        message_body = body_map_pat.match(body_part)
+        if not message_body:
+            continue
+        parsed_message_body: Dict = message_body.groupdict()
+
+        change_type = parsed_message_body.pop("change_type", None)
+        if change_type_map:
+            change_type = change_type_map.get(change_type, change_type)
+        changes[change_type].append(parsed_message_body)
 
 
 def order_changelog_tree(tree: Iterable, change_type_order: List[str]) -> Iterable:

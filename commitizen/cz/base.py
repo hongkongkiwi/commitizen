@@ -1,5 +1,6 @@
+import re
 from abc import ABCMeta, abstractmethod
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Pattern, Tuple
 
 from prompt_toolkit.styles import Style, merge_styles
 
@@ -31,6 +32,8 @@ class BaseCommitizen(metaclass=ABCMeta):
     changelog_pattern: Optional[str] = r".*"
     change_type_map: Optional[Dict[str, str]] = None
     change_type_order: Optional[List[str]] = None
+    tag_parser = ".*"
+    tag_pattern: Pattern
 
     # Executed per message parsed by the commitizen
     changelog_message_builder_hook: Optional[
@@ -44,6 +47,8 @@ class BaseCommitizen(metaclass=ABCMeta):
         self.config = config
         if not self.config.settings.get("style"):
             self.config.settings.update({"style": BaseCommitizen.default_style_config})
+
+        self.tag_pattern = re.compile(self.tag_parser)
 
     @abstractmethod
     def questions(self) -> Questions:
